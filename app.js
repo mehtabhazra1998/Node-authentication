@@ -3,17 +3,18 @@ var express = require('express');
 var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
-
+var session=require('express-session');
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
 const mongoose =require('mongoose');
 const Dishes=require('./models/dishes');
-
+var FileStore=require('session-file-store')(session);
 const url='mongodb://localhost:27017/confusion';
 const connect =mongoose.connect(url);
 var app = express();
 
-
+var passport=require('passport');
+var authenticate=require('./authenticate');
 
 
 
@@ -31,34 +32,44 @@ app.set('view engine', 'jade');
 app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-app.use(cookieParser());
+// app.use(cookieParser('12345-67890-09876-54321'));
+app.use(session({
+	name:'session-id',
+	secret:'12345-67890-09876-54321',
+	saveUnintialized:false,
+	resave:false,
+	store:new FileStore()
+
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+
+app.use('/', indexRouter);
+app.use('/users', usersRouter);
 
 function auth (req, res, next) {
-  console.log(req.headers);
-  var authHeader = req.headers.authorization;
-  if (!authHeader) {
-      var err = new Error('You are not authenticated!');
-      res.setHeader('WWW-Authenticate', 'Basic');
-      err.status = 401;
-      next(err);
-      return;
+  console.log(req.session);
+  if(!req.user)
+  {
+   	
+ 	      var err = new Error('You are not authenticated!');
+ 	     // res.redirect('/');
+ 	      err.status = 403;
+ 	      next(err);
+ 	      // next(err);
+ 	      // return;
+ 	  
   }
-
-  var auth = new Buffer(authHeader.split(' ')[1], 'base64').toString().split(':');
-  var user = auth[0];
-  var pass = auth[1];
-  if (user == 'admin' && pass == 'password') {
-      next(); // authorized
-  } else {
-      var err = new Error('You are not authenticated!');
-      res.setHeader('WWW-Authenticate', 'Basic');      
-      err.status = 401;
-      next(err);
+  else{
+  	next();
   }
+  
 }
 
 app.use(auth);
-
+ 
 // function auth(req,res,next)
 // {
 // 	console.log(req.headers);
@@ -88,12 +99,8 @@ app.use(auth);
 
 // }
 
-app.use(auth);
 
 app.use(express.static(path.join(__dirname, 'public')));
-
-app.use('/', indexRouter);
-app.use('/users', usersRouter);
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
